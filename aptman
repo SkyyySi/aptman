@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+
+# Show some help information.
+function opts { echo -e \
+'This is a wrapper script for apt/apt-get.
+Available options:
+  -h <option>               - Shows this help message.
+  -S [options] [package(s)] - Sync and compare the local package database with a remote one.
+  -R [options] [package(s)] - Remove one or more package(s).
+  -Q [options] [package(s)] - Search in the local package database.
+  -U [options] [file(s)]    - Install a locally stored package.'
+}
+#opts
+
+if [[ "$EUID" != '0' ]]; then
+	echo 'This script MUST be run as root! Exiting.'
+	exit 1
+fi
+
+function short-selector {
+	local o c So Ro Qo command_temp=() command_temp_build=() command_temp_prefix='' command_temp_suffix=''
+
+	if [[ $@ =~ '--noconfirm' ]]; then
+		command_temp_suffix+='-y'
+	fi
+
+	while getopts ":hSRQU" o; do
+		case "${o}" in
+			h)
+				opts
+			;;
+
+			S)
+				while getopts ":yusi" So; do
+					case "${So}" in
+						y)
+							command_temp_build+="update "
+						;;
+
+						u)
+							command_temp_build+="upgrade ${command_temp_suffix} "
+						;;
+
+						s)
+							command_temp_build+="search "
+						;;
+
+						i)
+							command_temp_build+="show "
+						;;
+
+						*) ;;
+					esac
+				done
+
+				if [[ -n $command_temp_build ]]; then
+					for c in $command_temp_build; do
+						command_temp+="apt ${c} && "
+					done
+				fi
+
+				if [[ -n $2 ]]; then
+					command_temp+="apt install ${2} ${command_temp_suffix}"
+				fi
+
+				echo '$command_temp is '"${command_temp[@]}"
+
+				eval ${command_temp[@]}
+			;;
+
+			R)
+#				while getopts ":" So; do
+#					case "${So}" in
+#					esac
+#				done
+
+				for c in $@; do
+					if [[ ${c:0:1} != "-" ]]; then
+						command_temp_build+="${c} "
+					fi
+				done
+
+				command_temp+="apt remove ${command_temp_build} ${command_temp_suffix}"
+
+				eval ${command_temp[@]}
+			;;
+
+			Q)
+				echo "Option: Query"
+			;;
+
+			U)
+				for c in $@; do
+					if [[ ${c:0:1} != "-" ]]; then
+						command_temp_build+="${c} "
+					fi
+				done
+
+				dpkg --install ${command_temp_build}
+			;;
+
+			*)
+				opts
+			;;
+		esac
+	done
+}
+
+function long-selector {
+	while getopts	-l ":help,sync,remove,query" o; do
+		case "${o}" in
+			help) opts;;
+			sync) echo "Option: Sync";;
+			remove) echo "Option: Remove";;
+			query) echo "Option: Query";;
+		esac
+	done
+}
+
+short-selector "$@"
